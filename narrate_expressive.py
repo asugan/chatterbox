@@ -15,6 +15,8 @@ def make_silence(duration_s, sample_rate):
 def apply_fade(wav, sr, fade_duration):
     num_samples = wav.shape[1]
     fade_samples = min(int(fade_duration * sr), num_samples // 2)
+    if fade_samples == 0:
+        return wav
     fade_in = torch.linspace(0.0, 1.0, fade_samples)
     fade_out = torch.linspace(1.0, 0.0, fade_samples)
     wav[0, :fade_samples] *= fade_in
@@ -39,8 +41,7 @@ def split_paragraphs(text):
     return paragraphs
 
 
-def split_sentences(text):
-    nlp = spacy.load("en_core_web_sm")
+def split_sentences(nlp, text):
     doc = nlp(text)
     return [sent.text.strip() for sent in doc.sents if sent.text.strip()]
 
@@ -56,6 +57,7 @@ def main():
     parser.add_argument("--sentence_pause", type=float, default=0.4, help="Silence between sentences (seconds)")
     parser.add_argument("--paragraph_pause", type=float, default=1.2, help="Silence between paragraphs (seconds)")
     parser.add_argument("--fade", type=float, default=0.5, help="Fade in/out duration (seconds, 0 to disable)")
+    parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--loudness", type=float, default=-16.0, help="Target loudness in LUFS (-16=broadcast, 0 to disable)")
     args = parser.parse_args()
 
@@ -71,7 +73,9 @@ def main():
     print(f"Fade: {args.fade}s, Target loudness: {args.loudness} LUFS")
 
     print("Loading model...")
-    model = ChatterboxTTS.from_pretrained(device="cuda")
+    model = ChatterboxTTS.from_pretrained(device=args.device)
+    model.prepare_conditionals(args.reference_audio, exaggeration=args.exaggeration)
+    nlp = spacy.load("en_core_web_sm")
 
     sentence_silence = make_silence(args.sentence_pause, model.sr)
     paragraph_silence = make_silence(args.paragraph_pause, model.sr)
@@ -79,7 +83,7 @@ def main():
     all_wavs = []
     total_sentences = 0
     for p_idx, paragraph in enumerate(paragraphs):
-        sentences = split_sentences(paragraph)
+        sentences = split_sentences(nlp, paragraph)
         total_sentences += len(sentences)
 
         for s_idx, sentence in enumerate(sentences):
@@ -88,7 +92,6 @@ def main():
             print(f"[P{p_idx+1}/{len(paragraphs)}][S{s_idx+1}/{len(sentences)}] {sentence[:60]}...")
             wav = model.generate(
                 text=sentence,
-                audio_prompt_path=args.reference_audio,
                 exaggeration=args.exaggeration,
                 cfg_weight=args.cfg_weight,
                 temperature=args.temperature,
@@ -115,6 +118,7 @@ def main():
         print(f"Normalizing loudness to {args.loudness} LUFS...")
         final_wav = normalize_loudness(final_wav, model.sr, args.loudness)
 
+    final_wav = final_wav.float().clamp(-1.0, 1.0)
     ta.save(args.output, final_wav, model.sr)
     duration = final_wav.shape[1] / model.sr
     print(f"Saved: {args.output} ({duration:.1f}s)")
