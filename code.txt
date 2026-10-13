@@ -1,0 +1,2 @@
+python narrate_expressive.py or.txt reference_mono2.wav -o cikti.wav --pause 0.2 --exaggeration 0.6
+python narrate_expressive.py or.txt reference_mono3.wav -o deneme.wav --exaggeration 0.6 --sentence_pause 0.2 --paragraph_pause 1.2 --fade 0.5 --loudness -16
