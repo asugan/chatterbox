@@ -21,7 +21,7 @@ def narrate(text):
         f.write(text)
     proc = subprocess.Popen(
         [sys.executable, "-u", "narrate_expressive.py", f.name, REFERENCE, "-o", str(out),
-         "--exaggeration", "0.6", "--sentence_pause", "0.2", "--paragraph_pause", "1.2",
+         "--exaggeration", "0.6", "--sentence_pause", "0.2", "--paragraph_pause", "0.8",
          "--fade", "0.5", "--loudness", "-16"],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
     )
